@@ -1,0 +1,8 @@
+.build/
+dist/
+build/
+__pycache__/
+/AudisonBridge-laptop.zip
+*.log
+.env
+.env.*
