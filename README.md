@@ -38,10 +38,11 @@ GitHub carries the project files and commit history. Conversation handoff is
 handled separately by Codex; the repository's `AGENTS.md` and this README provide
 project context for a new chat.
 
-Current handoff state: firmware and dashboard implementation are complete;
-the ESP32 build and host tests have passed. The next step is confirming the
-physical board and performing the first USB installation and bench test.
-No controller has been flashed or hardware-tested as part of this work.
+Current handoff state: the user has installed diagnostics on an ESP-WROOM-32.
+A cold-boot log captured mute ON with later volume changes still muted. The
+firmware now clears mute when the volume level changes; this update still
+requires physical validation. Complete the remaining dashboard and OTA bench
+tests below before treating those features as hardware-verified.
 
 ## First installation over USB
 
@@ -142,8 +143,12 @@ and never accesses hardware. Stop it with Ctrl+C.
 - Application `Console` messages go to both USB and RAM. Bootloader, ROM, and
   ESP-IDF internal messages are USB-only. Log text is bounded to 191 characters
   per entry; longer application lines are split across consecutive entries.
-- The existing 0–44 → −60 to +6 dB mapping, separate mute handling, 50 ms minimum
-  command gap, and ignored level 45 are preserved. “Audison output” is the last
+- Levels 0–44 map to −60 to +6 dB. A change between known valid volume levels
+  clears mute, matching the head unit. The first volume frame establishes a
+  baseline; repeated levels and invalid/ignored frames do not clear mute.
+  Repeated mute ON broadcasts do not reassert mute after a volume change;
+  a fresh OFF → ON transition does. The 50 ms minimum command gap and ignored
+  level 45 are preserved. “Audison output” is the last
   command sent, not confirmed DSP state: set-volume commands have no response.
 - WPA2 Wi-Fi and HTTP Basic authentication protect access. Reboot and upload
   also require a per-boot action token and a valid local host/origin. Keep the
@@ -178,7 +183,7 @@ The build and host tests do not establish Wi-Fi range, runtime heap margin,
 electrical behavior, or reliable flashing on the actual controller. Bench-test
 initial USB installation, login, disconnected/reconnected logging, CAN volume
 and mute, reboot, a valid OTA update, and a rejected/aborted upload before use
-in the car. No physical controller has been flashed as part of this change.
+in the car. The volume-change unmute update still requires a physical test.
 
 Espressif references: [OTA web update](https://docs.espressif.com/projects/arduino-esp32/en/latest/ota_web_update.html)
 and [partition tables](https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/partition_table.html).

@@ -6,11 +6,15 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
 
 ## Current state and next work
 
-- The Wi-Fi diagnostics implementation is present, compiles, and has passing
-  host-side tests. It has not been flashed or tested on the physical controller.
-- The next task is to identify the connected ESP32 model, flash size, and serial
-  port, install over USB with the correct OTA partitions, then bench-test the
-  dashboard, logs, download, restart, volume/mute, and OTA updates.
+- The user has installed diagnostics on an ESP-WROOM-32. A physical cold-boot
+  log shows mute ON followed by decoded volume changes remaining at -60 dB.
+- Volume level changes now clear mute per the user's confirmed head-unit
+  behavior. Repeated volume/mute broadcasts do not clear/reassert mute;
+  the first volume frame establishes the baseline. Physical validation of
+  this change and the remaining dashboard/OTA bench checks are still required.
+- The updated ESP32 build (core 3.3.12, min_spiffs) and native regression suite
+  pass. Native tests were run with a portable Zig C++ compiler in ignored
+  .build/test-tools because this computer lacks the default VS Build Tools.
 - Read README.md for setup, API endpoints, maintenance behavior, and limitations.
 
 ## Source and build
@@ -35,7 +39,10 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
 - Car mode is CAN listen-only at 100 kbps; CAN TX/RX pins are 26/25 and UART
   TX/RX pins are 23/22. Serial and Audison UART both use 115200 baud.
 - Head-unit levels 0..44 map linearly to -60..+6 dB. Ignore level 45.
-- Mute is independent of volume. Keep the 50 ms minimum command interval.
+- A change between known valid volume levels clears mute. Repeated levels and
+  ignored/invalid frames do not. Track the received mute state separately so
+  repeated ON broadcasts do not reassert mute; a fresh OFF -> ON does.
+  Keep the 50 ms minimum command interval.
 - Audison set-volume commands have no response; transmitted commands and UART
   loopback bytes are not acknowledgements of the DSP's state.
 - Diagnostics must start even if CAN initialization fails.

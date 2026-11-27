@@ -49,11 +49,12 @@ constexpr uint32_t COMMAND_GAP_MS = 50;
 
 static_assert(sizeof(HYUNDAI_VOLUME_RAW) == 46, "Hyundai table needs 46 entries");
 
-// Audison UART and independent Hyundai volume/mute states.
+// Audison UART, effective mute, and last observed Hyundai mute state.
 HardwareSerial AudisonSerial(2);
 int requestedVolume = -1;
 bool requestedMute = false;
 bool muteStateKnown = false;
+bool lastCanMute = false;
 
 // Pending/sent Audison commands and CAN initialization state.
 int pendingCode = -1;
@@ -119,11 +120,12 @@ void processCanMessage(const twai_message_t &message)
       return;
     }
     bool muted = (message.data[MUTE_BYTE_INDEX] & MUTE_MASK) != 0;
-    if (muteStateKnown && muted == requestedMute)
+    if (muteStateKnown && muted == lastCanMute)
     {
       return;
     }
     muteStateKnown = true;
+    lastCanMute = muted;
     requestedMute = muted;
     updatePendingVolume();
     Console.printf("CAN mute received: %s\n", requestedMute ? "ON" : "OFF");
@@ -141,13 +143,21 @@ void processCanMessage(const twai_message_t &message)
   {
     return;
   }
+  // The first volume frame establishes a baseline. A subsequent level change
+  // cancels mute, matching the head unit. Repeated frames cannot cancel mute.
+  if (requestedVolume >= 0 && requestedMute)
+  {
+    requestedMute = false;
+    Console.println("CAN volume change: mute cleared");
+  }
   requestedVolume = volume;
   updatePendingVolume();
   double pendingDb = (int(AUDISON_ZERO_DB) - pendingCode) * 0.5;
   Console.printf("CAN volume received: %d (raw 0x%02X) -> Audison: %.1f dB (0x%02X)%s\n",
                 requestedVolume, raw, pendingDb, pendingCode, requestedMute ? " (muted)" : "");
   // Level 45 and values absent from the captured Hyundai table are ignored.
-  // Volume changes never clear mute; the separate mute frame controls that.
+  // Repeated mute frames are compared with lastCanMute, so a stale ON frame
+  // cannot re-mute after a volume change. A new OFF -> ON transition can.
   // Logs still occur on receipt, independently of the Audison command timer.
 }
 

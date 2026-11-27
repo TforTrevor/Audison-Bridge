@@ -15,7 +15,7 @@ void debugPublishStats(const BridgeStats &stats){published=stats;}
 bool debugMaintenanceActive(){return maintenanceTest;}
 
 void reset(){
-  requestedVolume=-1;requestedMute=false;muteStateKnown=false;
+  requestedVolume=-1;requestedMute=false;muteStateKnown=false;lastCanMute=false;
   pendingCode=-1;lastSentCode=-1;lastSendMs=0;canReady=false;
   liveStats=BridgeStats{};lastStatsMs=0;fakeMs=100;
   packets.clear();usbLog.clear();incoming.clear();maintenanceTest=false;
@@ -53,9 +53,15 @@ void mapping(){
 void muteAndTiming(){
   reset();processCanMessage(volume(20));sendPendingVolume();expectPacket(0x6C);
   processCanMessage(mute(true));fakeMs+=50;sendPendingVolume();expectPacket(0xA8);
-  const auto size=packets.size();processCanMessage(volume(30));fakeMs+=50;sendPendingVolume();
-  assert(packets.size()==size&&requestedMute);
-  processCanMessage(mute(false));sendPendingVolume();expectPacket(0x4E);
+  const auto size=packets.size();processCanMessage(volume(20));fakeMs+=50;sendPendingVolume();
+  assert(packets.size()==size&&requestedMute); // Broadcast of unchanged level stays muted.
+  processCanMessage(volume(30));sendPendingVolume();expectPacket(0x4E);
+  assert(packets.size()==size+1&&!requestedMute);
+  processCanMessage(mute(true));fakeMs+=50;sendPendingVolume();
+  assert(!requestedMute&&packets.size()==size+1); // Stale ON cannot reassert mute.
+  processCanMessage(mute(false));processCanMessage(mute(true));sendPendingVolume();
+  expectPacket(0xA8);assert(requestedMute); // A fresh mute transition still works.
+  processCanMessage(mute(false));fakeMs+=50;sendPendingVolume();expectPacket(0x4E);
   reset();processCanMessage(mute(true));sendPendingVolume();expectPacket(0xA8);
   processCanMessage(mute(false));assert(pendingCode==-1);
   auto shortMute=mute(true);shortMute.data_length_code=2;processCanMessage(shortMute);assert(!requestedMute);
@@ -66,6 +72,27 @@ void muteAndTiming(){
   fakeMs=100;sendPendingVolume();expectPacket(0x9C);
   lastSendMs=0xfffffff0u;fakeMs=0x21;processCanMessage(volume(5));sendPendingVolume();assert(packets.size()==n+1);
   fakeMs=0x22;sendPendingVolume();expectPacket(0x99);
+}
+void coldBootMuteRecovery(){
+  reset();processCanMessage(mute(true));sendPendingVolume();expectPacket(0xA8);
+  processCanMessage(volume(15));assert(requestedMute&&requestedVolume==15);
+  const auto size=packets.size();
+  auto invalid=volume(0);invalid.data[0]=0xFF;
+  processCanMessage(invalid);processCanMessage(volume(45));
+  processCanMessage(volume(15));fakeMs+=50;sendPendingVolume();
+  assert(requestedMute&&packets.size()==size);
+  processCanMessage(volume(16));processCanMessage(mute(true));sendPendingVolume();
+  expectPacket(0x78);assert(!requestedMute&&requestedVolume==16);
+  assert(usbLog.find("CAN volume change: mute cleared")!=std::string::npos);
+  processCanMessage(mute(false));processCanMessage(mute(true));
+  fakeMs+=50;sendPendingVolume();expectPacket(0xA8);
+  processCanMessage(volume(15)); // A decrease also clears mute and respects 50 ms.
+  sendPendingVolume();expectPacket(0xA8);assert(!requestedMute);
+  fakeMs+=50;sendPendingVolume();expectPacket(0x7B);
+  publishStats();assert(!published.muted&&published.muteKnown&&published.volume==15);
+  processCanMessage(mute(false));processCanMessage(mute(true));
+  processCanMessage(volume(0));fakeMs+=50;sendPendingVolume();
+  expectPacket(0xA8);assert(!requestedMute&&requestedVolume==0);
 }
 void maintenanceAndStartup(){
   reset();maintenanceTest=true;processCanMessage(volume(20));sendPendingVolume();assert(packets.empty());
@@ -147,6 +174,6 @@ void firmwareLifecycle(){
     assert(f.begin(32,64)&&f.write(data,32)&&f.finishFile(32)&&f.activate());
   }
 }
-int main(){mapping();muteAndTiming();maintenanceAndStartup();ringHistory();firmwareLifecycle();
-  std::cout<<"PASS: actual bridge mapping, mute, invalid CAN, command timing/wrap, OTA pause/resume, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
+int main(){mapping();muteAndTiming();coldBootMuteRecovery();maintenanceAndStartup();ringHistory();firmwareLifecycle();
+  std::cout<<"PASS: actual bridge mapping, mute and volume-change unmute, cold-boot mute recovery, invalid CAN, command timing/wrap, OTA pause/resume, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
 }
