@@ -46,6 +46,10 @@ constexpr uint8_t AUDISON_MIN_VOLUME = 0xA8;
 constexpr uint8_t AUDISON_ZERO_DB = 0x30;
 constexpr uint8_t AUDISON_CODES_PER_STEP = 3; // Three 0.5 dB codes per head-unit step.
 constexpr uint32_t COMMAND_GAP_MS = 50;
+// DSP startup has no readiness/acknowledgement signal. Briefly repeat the latest
+// requested state so an early command missed during power-up can be reapplied.
+constexpr uint32_t STARTUP_SYNC_MS = 15000;
+constexpr uint32_t STARTUP_RESEND_MS = 1000;
 
 static_assert(sizeof(HYUNDAI_VOLUME_RAW) == 46, "Hyundai table needs 46 entries");
 
@@ -60,6 +64,8 @@ bool lastCanMute = false;
 int pendingCode = -1;
 int lastSentCode = -1;
 uint32_t lastSendMs = 0;
+uint32_t startupSyncStartedMs = 0;
+bool startupSyncActive = false;
 bool canReady = false;
 BridgeStats liveStats;
 uint32_t lastStatsMs = 0;
@@ -143,9 +149,9 @@ void processCanMessage(const twai_message_t &message)
   {
     return;
   }
-  // The first volume frame establishes a baseline. A subsequent level change
-  // cancels mute, matching the head unit. Repeated frames cannot cancel mute.
-  if (requestedVolume >= 0 && requestedMute)
+  // The first valid level also synchronizes startup volume and clears startup
+  // mute. Later repeated levels cannot cancel an intentional mute.
+  if (requestedMute)
   {
     requestedMute = false;
     Console.println("CAN volume change: mute cleared");
@@ -163,8 +169,14 @@ void processCanMessage(const twai_message_t &message)
 
 void sendPendingVolume()
 {
-  if (debugMaintenanceActive() || pendingCode < 0 || pendingCode == lastSentCode ||
-      uint32_t(millis() - lastSendMs) < COMMAND_GAP_MS)
+  const uint32_t now = millis();
+  if (startupSyncActive && uint32_t(now - startupSyncStartedMs) >= STARTUP_SYNC_MS)
+    startupSyncActive = false;
+  const bool resend = startupSyncActive && pendingCode == lastSentCode &&
+                      uint32_t(now - lastSendMs) >= STARTUP_RESEND_MS;
+  if (debugMaintenanceActive() || pendingCode < 0 ||
+      (pendingCode == lastSentCode && !resend) ||
+      uint32_t(now - lastSendMs) < COMMAND_GAP_MS)
   {
     return;
   }
@@ -177,6 +189,7 @@ void sendPendingVolume()
   }
   packet[5] = uint8_t(checksum >> 8);
   packet[6] = uint8_t(checksum);
+  if (resend) Console.println("Audison startup sync: resending latest state");
   AudisonSerial.write(packet, sizeof(packet));
   AudisonSerial.flush();
   lastSendMs = millis();
@@ -233,6 +246,8 @@ void initializeCan()
 
   canReady = true;
   lastSendMs = millis();
+  startupSyncStartedMs = lastSendMs;
+  startupSyncActive = true;
   Console.printf("Ready: CAN 100 kbps, volume 0x183, mute 0x181, %s; Audison 115200 8N1; linear 0..44 -> -60..+6 dB\n",
                 CAN_LISTEN_ONLY ? "listen-only (car)" : "normal (bench)");
 }

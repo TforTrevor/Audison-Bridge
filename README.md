@@ -40,8 +40,9 @@ project context for a new chat.
 
 Current handoff state: the user has installed diagnostics on an ESP-WROOM-32.
 A cold-boot log captured mute ON with later volume changes still muted. The
-firmware now clears mute when the volume level changes; this update still
-requires physical validation. Complete the remaining dashboard and OTA bench
+firmware now clears mute on the first valid startup volume and later level
+changes, and briefly resends the latest state during DSP startup. This update
+still requires physical validation. Complete the remaining dashboard and OTA bench
 tests below before treating those features as hardware-verified.
 
 ## First installation over USB
@@ -154,13 +155,21 @@ and never accesses hardware. Stop it with Ctrl+C.
 - Application `Console` messages go to both USB and RAM. Bootloader, ROM, and
   ESP-IDF internal messages are USB-only. Log text is bounded to 191 characters
   per entry; longer application lines are split across consecutive entries.
-- Levels 0–44 map to −60 to +6 dB. A change between known valid volume levels
-  clears mute, matching the head unit. The first volume frame establishes a
-  baseline; repeated levels and invalid/ignored frames do not clear mute.
+- Levels 0–44 map to −60 to +6 dB. The first valid volume reading after boot
+  clears startup mute and sets that volume; later level changes also clear
+  mute, matching the head unit. Repeated levels and invalid/ignored frames
+  do not clear mute.
   Repeated mute ON broadcasts do not reassert mute after a volume change;
   a fresh OFF → ON transition does. The 50 ms minimum command gap and ignored
   level 45 are preserved. “Audison output” is the last
   command sent, not confirmed DSP state: set-volume commands have no response.
+- For the first 15 seconds after CAN starts, the bridge resends the latest
+  requested volume or mute at 1-second intervals, covering commands that may
+  arrive before the DSP is ready. Changes still use the 50 ms minimum gap;
+  OTA maintenance pauses all output. Replays stop at the end of that window
+  and never restore an earlier level over a newer volume or mute request.
+  No volume is sent without a valid CAN volume or mute request. The window
+  is a startup retry policy, not DSP readiness detection or acknowledgement.
 - WPA2 Wi-Fi and HTTP Basic authentication protect access. Reboot and upload
   also require a per-boot action token and a valid local host/origin. Keep the
   service on the local ESP32 network; it is HTTP, not an internet-facing service.
@@ -194,7 +203,8 @@ The build and host tests do not establish Wi-Fi range, runtime heap margin,
 electrical behavior, or reliable flashing on the actual controller. Bench-test
 initial USB installation, login, disconnected/reconnected logging, CAN volume
 and mute, reboot, a valid OTA update, and a rejected/aborted upload before use
-in the car. The volume-change unmute update still requires a physical test.
+in the car. First-volume synchronization and startup retries still require a
+physical cold-boot test without touching the volume knob.
 
 Espressif references: [OTA web update](https://docs.espressif.com/projects/arduino-esp32/en/latest/ota_web_update.html)
 and [partition tables](https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/partition_table.html).

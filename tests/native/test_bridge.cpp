@@ -17,6 +17,7 @@ bool debugMaintenanceActive(){return maintenanceTest;}
 void reset(){
   requestedVolume=-1;requestedMute=false;muteStateKnown=false;lastCanMute=false;
   pendingCode=-1;lastSentCode=-1;lastSendMs=0;canReady=false;
+  startupSyncStartedMs=0;startupSyncActive=false;
   liveStats=BridgeStats{};lastStatsMs=0;fakeMs=100;
   packets.clear();usbLog.clear();incoming.clear();maintenanceTest=false;
   debugStarted=false;installError=0;startError=0;fakeStatus={};
@@ -75,12 +76,15 @@ void muteAndTiming(){
 }
 void coldBootMuteRecovery(){
   reset();processCanMessage(mute(true));sendPendingVolume();expectPacket(0xA8);
-  processCanMessage(volume(15));assert(requestedMute&&requestedVolume==15);
-  const auto size=packets.size();
   auto invalid=volume(0);invalid.data[0]=0xFF;
   processCanMessage(invalid);processCanMessage(volume(45));
+  assert(requestedMute&&requestedVolume==-1); // Only a valid level can sync startup.
+  processCanMessage(volume(15));assert(!requestedMute&&requestedVolume==15);
+  fakeMs+=50;sendPendingVolume();expectPacket(0x7B);
+  const auto size=packets.size();
+  processCanMessage(invalid);processCanMessage(volume(45));
   processCanMessage(volume(15));fakeMs+=50;sendPendingVolume();
-  assert(requestedMute&&packets.size()==size);
+  assert(!requestedMute&&packets.size()==size);
   processCanMessage(volume(16));processCanMessage(mute(true));sendPendingVolume();
   expectPacket(0x78);assert(!requestedMute&&requestedVolume==16);
   assert(usbLog.find("CAN volume change: mute cleared")!=std::string::npos);
@@ -93,6 +97,53 @@ void coldBootMuteRecovery(){
   processCanMessage(mute(false));processCanMessage(mute(true));
   processCanMessage(volume(0));fakeMs+=50;sendPendingVolume();
   expectPacket(0xA8);assert(!requestedMute&&requestedVolume==0);
+}
+void startupSyncRetries(){
+  reset();setup();const auto started=startupSyncStartedMs;
+  // Reproduce the captured cold boot: initial mute ON, then only level 15.
+  incoming.push_back(mute(true));incoming.push_back(volume(15));loop();
+  assert(packets.empty());fakeMs=started+50;loop();
+  expectPacket(0x7B);assert(!requestedMute&&requestedVolume==15);
+  auto count=packets.size();fakeMs=lastSendMs+STARTUP_RESEND_MS-1;
+  processCanMessage(volume(15));processCanMessage(mute(true));sendPendingVolume();
+  assert(!requestedMute&&packets.size()==count);
+  ++fakeMs;sendPendingVolume();assert(packets.size()==++count);expectPacket(0x7B);
+  // Model a DSP unavailable until 3 seconds: it must get level 15 without a knob change.
+  int dspCode=0x4E; // Previously retained head-unit level 30.
+  while(fakeMs<started+4000){
+    const auto before=packets.size();
+    fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();
+    if(fakeMs>=started+3000&&packets.size()>before)dspCode=packets.back()[4];
+  }
+  assert(dspCode==0x7B&&requestedVolume==15);
+  assert(usbLog.find("Audison startup sync: resending latest state")!=std::string::npos);
+  // Stop replaying at the exact end of the window, even if a resend is due.
+  count=packets.size();fakeMs=started+STARTUP_SYNC_MS;sendPendingVolume();
+  assert(!startupSyncActive&&packets.size()==count);
+  fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();assert(packets.size()==count);
+  processCanMessage(volume(16));sendPendingVolume();expectPacket(0x78);
+}
+void startupSyncLatestState(){
+  reset();initializeCan();fakeMs+=50;processCanMessage(volume(15));sendPendingVolume();
+  processCanMessage(mute(true));fakeMs+=50;sendPendingVolume();expectPacket(0xA8);
+  auto count=packets.size();fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();
+  assert(packets.size()==count+1&&requestedMute);expectPacket(0xA8);
+  // Upload pauses replays; a failed upload resumes the newest requested state.
+  maintenanceTest=true;processCanMessage(volume(20));
+  count=packets.size();fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();
+  assert(packets.size()==count&&!requestedMute);
+  processCanMessage(volume(25));maintenanceTest=false;sendPendingVolume();expectPacket(0x5D);
+  fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();expectPacket(0x5D);
+  reset();initializeCan();fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();
+  assert(packets.empty()); // Never invent a volume when CAN has not supplied one.
+  reset();fakeMs=0xfffffff0u;initializeCan();processCanMessage(volume(15));
+  fakeMs+=50;sendPendingVolume();expectPacket(0x7B);
+  count=packets.size();fakeMs+=STARTUP_RESEND_MS;sendPendingVolume();
+  assert(packets.size()==count+1); // Retry timing survives millis() rollover.
+  fakeMs=startupSyncStartedMs+STARTUP_SYNC_MS;sendPendingVolume();
+  assert(!startupSyncActive);count=packets.size();
+  fakeMs=startupSyncStartedMs+1000;sendPendingVolume();
+  assert(packets.size()==count); // Once closed, rollover cannot reopen the window.
 }
 void maintenanceAndStartup(){
   reset();maintenanceTest=true;processCanMessage(volume(20));sendPendingVolume();assert(packets.empty());
@@ -174,6 +225,6 @@ void firmwareLifecycle(){
     assert(f.begin(32,64)&&f.write(data,32)&&f.finishFile(32)&&f.activate());
   }
 }
-int main(){mapping();muteAndTiming();coldBootMuteRecovery();maintenanceAndStartup();ringHistory();firmwareLifecycle();
-  std::cout<<"PASS: actual bridge mapping, mute and volume-change unmute, cold-boot mute recovery, invalid CAN, command timing/wrap, OTA pause/resume, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
+int main(){mapping();muteAndTiming();coldBootMuteRecovery();startupSyncRetries();startupSyncLatestState();maintenanceAndStartup();ringHistory();firmwareLifecycle();
+  std::cout<<"PASS: actual bridge mapping, mute and volume-change unmute, first-volume startup sync, bounded startup retries and rollover, latest-state replay and OTA pause/resume, invalid CAN, command timing/wrap, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
 }
