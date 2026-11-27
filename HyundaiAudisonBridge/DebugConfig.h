@@ -9,7 +9,7 @@
 #endif
 
 namespace DebugConfig {
-constexpr char FIRMWARE_VERSION[] = "1.0.2-wifi";
+constexpr char FIRMWARE_VERSION[] = "1.0.3-wifi";
 constexpr char HOSTNAME[] = "audison-bridge";
 constexpr char AP_PREFIX[] = "Audison-Bridge-";
 constexpr char USERNAME[] = "admin";

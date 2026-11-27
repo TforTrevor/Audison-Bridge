@@ -9,6 +9,7 @@ static const char DASHBOARD_HTML[] PROGMEM = R"BRIDGEPAGE(<!doctype html>
 <meta name="theme-color" content="#101419">
 <title>Audison Bridge · Diagnostics</title>
 <style>
+.output-control{margin-bottom:1rem}.output-control .panel-head{flex-wrap:wrap}.output-control .actions{align-items:center}
 :root{color-scheme:dark;--bg:#101419;--panel:#181e25;--line:#303a46;--text:#eef2f6;--muted:#a3b0bf;--accent:#f6bc64;--green:#8ed4b2;--red:#ff9797;font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}button,input,a{font:inherit}button,.button{cursor:pointer;color:var(--text);background:#252e39;border:1px solid #435062;border-radius:7px;padding:.6rem .9rem;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}button:hover,.button:hover{background:#344050}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.primary{color:#241b0e;background:var(--accent);border-color:var(--accent);font-weight:650}.primary:hover{background:#ffd38f}.danger{color:var(--red)}header{border-bottom:1px solid var(--line);padding:1.1rem max(1.2rem,calc((100vw - 1280px)/2));display:flex;align-items:center;justify-content:space-between;gap:1rem;background:#151a20}.brand{display:flex;align-items:center;gap:.85rem}.mark{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--accent);border-radius:10px;color:var(--accent);font-weight:750;font-size:1.1rem}.brand strong{font-size:1.1rem;letter-spacing:.02em}.brand small{display:block;font-size:.8rem;color:var(--muted)}.connection{font-size:.875rem;color:var(--muted);display:flex;align-items:center;gap:.55rem}.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}.online .dot{background:var(--green)}.offline .dot{background:var(--red)}main{max-width:1320px;margin:auto;padding:2rem 1.25rem 3rem}nav{display:flex;gap:1.3rem;margin:.8rem 0 1.7rem;border-bottom:1px solid var(--line);padding-bottom:.8rem}nav a{color:var(--muted);text-decoration:none}nav a:hover{color:var(--accent)}h1{font-size:1.8rem;line-height:1.2;font-weight:650;margin:0 0 .6rem}h2{font-size:1rem;font-weight:650;margin:0}p{margin:.35rem 0;color:var(--muted)}.intro{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.25rem}.eyebrow{color:var(--accent);font-size:.8rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem}.stat,.panel{border:1px solid var(--line);background:var(--panel);border-radius:10px}.stat{padding:1.1rem 1.25rem}.stat-label{font-size:.875rem;color:var(--muted)}.stat-value{font-size:1.7rem;line-height:1.4;margin:.25rem 0;font-variant-numeric:tabular-nums}.stat-detail{font-size:.8rem;color:var(--muted)}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}.panel-head{padding:1rem 1.25rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:1rem}.badge{color:var(--muted);font-size:.8rem;border:1px solid var(--line);border-radius:5px;padding:.15rem .5rem}.good{color:var(--green)}.warn{color:var(--accent)}.bad{color:var(--red)}dl{display:grid;grid-template-columns:1fr auto;gap:.6rem 1rem;padding:1rem 1.25rem;margin:0;font-size:.875rem}dt{color:var(--muted)}dd{margin:0;text-align:right;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.panel{scroll-margin-top:1rem}.console{margin:1.5rem 0}.toolbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.8rem 1.25rem;border-bottom:1px solid var(--line)}.toolbar input[type=search]{flex:1;min-width:130px;background:#101419;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:.55rem .75rem}.toolbar label{font-size:.875rem;display:flex;align-items:center;gap:.4rem}.toolbar button,.toolbar .button{font-size:.875rem;padding:.5rem .7rem}.log-window{height:360px;overflow:auto;background:#0c1015;padding:.85rem 1.1rem;font: .82rem/1.8 ui-monospace,SFMono-Regular,Consolas,monospace}.log-line{display:flex;gap:1rem;white-space:pre-wrap;overflow-wrap:anywhere}.log-time{color:#8c9baa;flex:0 0 7.2rem;font-variant-numeric:tabular-nums}.log-message{color:#d1dce8}.log-line.error .log-message{color:var(--red)}.log-line.event .log-message{color:var(--accent)}.empty{color:var(--muted);padding:1rem 0}.console-foot{border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:1rem;padding:.65rem 1.25rem;font-size:.8rem;color:var(--muted)}.panel-body{padding:1.25rem}.firmware-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:2rem}.upload-box{border:1px dashed #536172;padding:1.2rem;border-radius:8px;margin:.8rem 0 1rem;background:#121820}.upload-box label{display:block;margin-bottom:.6rem;font-weight:600}.upload-box input{width:100%;font-size:.875rem}input::file-selector-button{background:#303a46;border:0;border-radius:4px;color:var(--text);padding:.5rem .7rem;margin-right:.6rem;cursor:pointer}.help{font-size:.875rem}progress{width:100%;height:10px;accent-color:var(--accent);margin-top:1rem}.status-message{font-size:.875rem;min-height:1.5rem;margin-top:.5rem;overflow-wrap:anywhere}.maintenance-note{color:var(--accent);background:#292318;border:1px solid #59492e;border-radius:7px;padding:.8rem 1rem;font-size:.875rem;margin:.8rem 0}.notice{background:#242d38;border:1px solid #435369;border-radius:7px;margin-bottom:1.25rem;padding:.85rem 1rem;white-space:pre-line}.notice:empty{display:none}details{margin-top:1rem;border-top:1px solid var(--line);padding-top:.8rem}summary{cursor:pointer;color:var(--muted);font-size:.875rem}footer{color:var(--muted);font-size:.8rem;margin-top:1.5rem;display:flex;justify-content:space-between;gap:1rem}.actions{display:flex;gap:.7rem;flex-wrap:wrap}.subhead{font-weight:600;color:var(--text);margin-bottom:.5rem}[hidden]{display:none!important}
 @media(max-width:850px){.stats{grid-template-columns:1fr 1fr}.two-col,.firmware-layout{grid-template-columns:1fr}.firmware-layout{gap:1.5rem}.intro{align-items:flex-start}.stat-value{font-size:1.5rem}}@media(max-width:520px){header{align-items:flex-start;flex-direction:column;padding:1rem 1.25rem}main{padding-top:1.5rem}h1{font-size:1.5rem}.intro{flex-direction:column}.stat{padding:.9rem}.stats{gap:.6rem}.toolbar{padding:.8rem}.toolbar input[type=search]{flex-basis:100%}.log-window{padding:.7rem;height:340px}.log-line{gap:.5rem}.log-time{flex-basis:6rem;font-size:.75rem}.console-foot,footer{flex-direction:column;gap:.25rem}.panel-head{padding:.9rem 1rem}dl{padding:1rem}.firmware-layout{gap:1rem}}
@@ -23,6 +24,10 @@ static const char DASHBOARD_HTML[] PROGMEM = R"BRIDGEPAGE(<!doctype html>
   <div class="intro" id="overview"><div><div class="eyebrow">Wireless service console</div><h1>A clear view of your bridge.</h1><p id="deviceSubtitle">Connect to the bridge’s Wi-Fi to begin.</p></div><span class="badge mono" id="version">Firmware —</span></div>
   <nav aria-label="Sections"><a href="#overview">Overview</a><a href="#console">Console & history</a><a href="#firmware">Firmware & restart</a></nav>
   <div id="notice" class="notice" role="status" aria-live="polite"></div>
+  <section class="panel output-control" aria-labelledby="outputTitle">
+    <div class="panel-head"><h2 id="outputTitle">Audison command output</h2><div class="actions"><span class="badge" id="outputBadge">Awaiting device</span><button id="outputToggle" type="button" disabled>Pause output</button></div></div>
+    <div class="panel-body"><p id="outputDetail" class="help">Connect to the bridge to control Audison output.</p><p class="help">Pausing leaves the DSP at its last volume. CAN decoding and logs continue. Resume sends the latest volume/mute state. Restarting the ESP32 clears the pause.</p><div id="outputStatus" class="status-message" role="status" aria-live="polite"></div></div>
+  </section>
   <section class="stats" aria-label="Live device readings">
     <div class="stat"><div class="stat-label">Uptime</div><div class="stat-value mono" id="uptime">—</div><div class="stat-detail" id="resetReason">Reset reason unavailable</div></div>
     <div class="stat"><div class="stat-label">Free memory</div><div class="stat-value mono" id="heap">—</div><div class="stat-detail" id="heapMin">Minimum since boot: —</div></div>
@@ -42,7 +47,7 @@ static const char DASHBOARD_HTML[] PROGMEM = R"BRIDGEPAGE(<!doctype html>
     <div class="toolbar">
       <input id="search" type="search" placeholder="Filter console messages…" aria-label="Filter console messages">
       <label><input type="checkbox" id="follow" checked> Follow</label>
-      <button id="pause" type="button">Pause</button><button id="history" type="button">Load history</button><button id="download" type="button">Download</button>
+      <button id="pause" type="button">Pause logs</button><button id="history" type="button">Load history</button><button id="download" type="button">Download</button>
     </div>
     <div class="log-window" id="logWindow" tabindex="0" role="region" aria-label="Console messages"><div class="empty">Waiting for the first log entry…</div></div>
     <div class="console-foot"><span id="logCount">No messages received</span><span id="retention">Current boot only · device keeps the latest 256 lines</span></div>
@@ -63,7 +68,7 @@ static const char DASHBOARD_HTML[] PROGMEM = R"BRIDGEPAGE(<!doctype html>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-const state={token:'',bootId:'',after:0,lines:[],logGeneration:0,paused:false,online:false,uploading:false,restarting:false,restartSince:0,operation:'',historyEnd:null,stats:null,previous:null,lost:0,trimmed:0};
+const state={token:'',bootId:'',after:0,lines:[],logGeneration:0,paused:false,online:false,uploading:false,restarting:false,restartSince:0,operation:'',historyEnd:null,stats:null,previous:null,lost:0,trimmed:0,outputPending:false,outputGeneration:0};
 let pollTimer;
 const set=(id,text)=>{$(id).textContent=text;};
 const bytes=n=>n==null?'—':n>=1048576?(n/1048576).toFixed(2)+' MB':(n/1024).toFixed(1)+' KB';
@@ -71,10 +76,17 @@ const count=n=>Number(n).toLocaleString();
 const clock=ms=>{const s=Math.floor(ms/1000);return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');};
 const logTime=ms=>clock(ms)+'.'+String(ms%1000).padStart(3,'0');
 function connection(online,text){state.online=online;$('connection').className='connection '+(online?'online':'offline');set('connectionText',text);controls();}
-function controls(){const busy=state.uploading||state.restarting;const file=$('firmwareFile').files[0];$('reboot').disabled=!state.online||busy;$('upload').disabled=!state.online||busy||!validFile(file);$('firmwareFile').disabled=busy;$('history').disabled=!state.online||busy;$('pause').disabled=busy;}
+function controls(){const busy=state.uploading||state.restarting||state.outputPending;const file=$('firmwareFile').files[0];$('reboot').disabled=!state.online||busy;$('upload').disabled=!state.online||busy||!validFile(file);$('firmwareFile').disabled=busy;$('history').disabled=!state.online||busy;$('pause').disabled=busy;outputControls();}
+function outputControls(){
+  const known=typeof state.stats?.outputPaused==='boolean',paused=state.stats?.outputPaused===true,maintenance=state.uploading||state.stats?.maintenance===true;
+  $('outputToggle').disabled=!state.online||state.uploading||state.restarting||state.outputPending||maintenance||!known;
+  set('outputToggle',state.outputPending?'Applying…':paused?'Resume output':'Pause output');
+  set('outputBadge',!known?'Awaiting device':paused?'Paused':maintenance?'Upload paused':'Active');$('outputBadge').className='badge '+(!known?'':paused||maintenance?'warn':'good');
+  set('outputDetail',!state.online?'Reconnect to confirm the current output state.':!known?'Output control is unavailable. Refresh readings or update the device firmware.':paused?'Audison commands are paused for debugging.':maintenance?'Audison commands are paused during firmware maintenance.':'The bridge is sending requested volume and mute changes to the Audison.');
+}
 function validFile(file){return !!file&&/\.bin$/i.test(file.name)&&file.size>=24&&!!state.stats?.otaBytes&&file.size<=state.stats.otaBytes;}
 async function api(path,options={}){const response=await fetch(path,{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(6000),...options});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Device request failed ('+response.status+')');return payload;}
-function resetBoot(id){state.bootId=id;state.after=0;state.lines=[];state.logGeneration++;state.lost=0;state.trimmed=0;state.previous=null;state.historyEnd=null;state.token='';renderLogs();}
+function resetBoot(id){state.bootId=id;state.after=0;state.lines=[];state.logGeneration++;state.lost=0;state.trimmed=0;state.previous=null;state.historyEnd=null;state.token='';state.stats=null;state.outputPending=false;state.outputGeneration++;set('outputStatus','');renderLogs();controls();}
 async function session(){const data=await api('/api/session');if(data.bootId!==state.bootId)resetBoot(data.bootId);state.token=data.token;}
 function updateStats(s){
   const prev=state.previous;const elapsed=prev?(s.uptimeMs-prev.uptimeMs)/1000:0;
@@ -110,36 +122,50 @@ async function collectLogs(){
     if(!data.lines.length||data.next>=data.latest)break;
   }
 }
-function logMode(){set('pause',state.paused?'Resume live':'Pause');set('logMode',state.paused?'History · paused':state.historyEnd==null?'Live':'Loading history');$('logMode').className='badge '+(state.paused?'warn':'good');}
+function logMode(){set('pause',state.paused?'Resume logs':'Pause logs');set('logMode',state.paused?'History · paused':state.historyEnd==null?'Live':'Loading history');$('logMode').className='badge '+(state.paused?'warn':'good');}
 async function poll(){
   clearTimeout(pollTimer);
-  if(state.uploading){pollTimer=setTimeout(poll,1000);return;}
+  if(state.uploading||state.outputPending){pollTimer=setTimeout(poll,1000);return;}
+  const outputGeneration=state.outputGeneration;
   try{
     const s=await api('/api/stats');
-    if(state.uploading)return;
+    if(state.uploading||state.outputPending||outputGeneration!==state.outputGeneration)return;
     if(s.bootId!==state.bootId){const restarted=state.restarting;resetBoot(s.bootId);await session();if(restarted){state.restarting=false;state.paused=false;logMode();if(state.operation==='reboot')set('rebootStatus','Device restarted successfully.');else set('uploadStatus','Device reconnected after restart. Reported firmware: '+s.firmware+'.');state.operation='';}}
     if(state.restarting&&Date.now()-state.restartSince>30000){state.restarting=false;set(state.operation==='reboot'?'rebootStatus':'uploadStatus','Device is still on the same boot. The operation was not confirmed; check the logs before retrying.');state.operation='';}
     if(!state.token)await session();
     updateStats(s);connection(true,state.restarting?'Restart requested…':'Connected · '+s.ip);
     if(state.restarting)set('notice','Waiting for the ESP32 to restart. Reconnect to its Wi-Fi if needed.');
     if(!state.paused)await collectLogs();
-  }catch(error){connection(false,state.restarting?'Restarting · reconnecting…':'Disconnected · retrying…');set('notice',state.restarting?'The ESP32 is restarting. Reconnect to its Wi-Fi if this page does not recover.':'Cannot reach the ESP32. Check the bridge’s Wi-Fi connection. '+error.message);}
+  }catch(error){if(outputGeneration!==state.outputGeneration)return;connection(false,state.restarting?'Restarting · reconnecting…':'Disconnected · retrying…');set('notice',state.restarting?'The ESP32 is restarting. Reconnect to its Wi-Fi if this page does not recover.':'Cannot reach the ESP32. Check the bridge’s Wi-Fi connection. '+error.message);}
   finally{pollTimer=setTimeout(poll,state.online?900:2000);}
 }
 $('search').addEventListener('input',renderLogs);$('follow').addEventListener('change',()=>{if($('follow').checked)$('logWindow').scrollTop=$('logWindow').scrollHeight;});
 $('pause').addEventListener('click',()=>{state.paused=!state.paused;state.historyEnd=null;logMode();});
+$('outputToggle').addEventListener('click',async()=>{
+  if($('outputToggle').disabled)return;
+  const paused=!state.stats.outputPaused,generation=++state.outputGeneration,bootId=state.bootId;
+  state.outputPending=true;set('outputStatus','');controls();
+  try{
+    const result=await api('/api/bridge-output',{method:'POST',headers:{'X-Bridge-Token':state.token,'Content-Type':'application/x-www-form-urlencoded'},body:'paused='+(paused?'1':'0')});
+    if(generation!==state.outputGeneration||bootId!==state.bootId)return;
+    if(result.bootId!==bootId||typeof result.outputPaused!=='boolean')throw new Error('Device state changed. Refresh readings before trying again.');
+    state.stats={...state.stats,outputPaused:result.outputPaused};
+  }catch(error){
+    if(generation===state.outputGeneration&&bootId===state.bootId){state.stats={...state.stats,outputPaused:null};set('outputStatus','Output change was not confirmed. '+error.message+' Refreshing device state…');}
+  }finally{if(generation===state.outputGeneration){state.outputPending=false;controls();}}
+});
 $('history').addEventListener('click',()=>{state.lines=[];state.after=0;state.logGeneration++;state.lost=0;state.trimmed=0;state.historyEnd=state.stats?.logLatest??0;state.paused=false;logMode();renderLogs();});
 $('download').addEventListener('click',()=>{const text='Audison Bridge | boot '+(state.bootId||'unknown')+'\nBrowser-captured current-boot history; '+state.lost+' device lines missed; '+state.trimmed+' older browser lines removed.\n'+state.lines.map(line=>'['+logTime(line.ms)+'] '+line.text).join('\n')+'\n';const url=URL.createObjectURL(new Blob([text],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='audison-'+(state.bootId||'logs')+'.log';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 $('firmwareFile').addEventListener('change',()=>{const file=$('firmwareFile').files[0];set('fileInfo',!file?'Use .ino.bin, not a merged, bootloader, or partition binary.':validFile(file)?file.name+' · '+bytes(file.size):'Choose an application .bin between 24 bytes and '+bytes(state.stats?.otaBytes)+'.');controls();});
 $('reboot').addEventListener('click',async()=>{
-  if(!state.online||state.uploading||state.restarting)return;
+  if(!state.online||state.uploading||state.restarting||state.outputPending)return;
   if(!confirm('Restart the ESP32? Current-boot log history will be cleared.'))return;
   state.restarting=true;state.restartSince=Date.now();state.operation='reboot';controls();set('rebootStatus','Requesting restart…');
   try{await api('/api/reboot',{method:'POST',headers:{'X-Bridge-Token':state.token}});set('rebootStatus','Restart requested. Waiting for the device…');}
   catch(error){state.restarting=false;set('rebootStatus',error.message);controls();}
 });
 $('upload').addEventListener('click',()=>{
-  const file=$('firmwareFile').files[0];if(!validFile(file)||!state.online||state.uploading||state.restarting)return;
+  const file=$('firmwareFile').files[0];if(!validFile(file)||!state.online||state.uploading||state.restarting||state.outputPending)return;
   if(!confirm('Upload '+file.name+' and restart? Park first. Bridge output will pause during the update.'))return;
   state.uploading=true;controls();$('uploadProgress').hidden=false;$('uploadProgress').value=0;set('uploadStatus','Sending firmware… Keep this page open.');set('notice','Firmware upload in progress. Bridge output is paused.');
   const request=new XMLHttpRequest();request.open('POST','/api/firmware');request.timeout=180000;request.setRequestHeader('X-Bridge-Token',state.token);request.setRequestHeader('X-Firmware-Size',String(file.size));

@@ -6,6 +6,7 @@
 
 BridgeConsole Console;
 bool maintenanceTest=false,debugStarted=false;
+OutputControl outputControlTest;
 BridgeStats published;
 size_t BridgeConsole::write(uint8_t value){return Serial.write(value);}
 size_t BridgeConsole::write(const uint8_t *data,size_t size){return Serial.write(data,size);}
@@ -13,10 +14,12 @@ void debugInitConsole(){}
 void debugBegin(){debugStarted=true;}
 void debugPublishStats(const BridgeStats &stats){published=stats;}
 bool debugMaintenanceActive(){return maintenanceTest;}
+uint32_t debugOutputControlSnapshot(){return outputControlTest.snapshot();}
 
 void reset(){
   requestedVolume=-1;requestedMute=false;muteStateKnown=false;lastCanMute=false;
   pendingCode=-1;lastSentCode=-1;lastSendMs=0;canReady=false;
+  outputControlTest.setPaused(false);lastOutputControlSnapshot=outputControlTest.snapshot();
   startupSyncStartedMs=0;startupSyncActive=false;
   liveStats=BridgeStats{};lastStatsMs=0;fakeMs=100;
   packets.clear();usbLog.clear();incoming.clear();maintenanceTest=false;
@@ -158,6 +161,39 @@ void maintenanceAndStartup(){
   fakeMs+=250;loop();assert(incoming.empty()&&published.canFrames==70);
   assert(published.serialPackets>0&&published.volume==24);
 }
+void manualOutputPause(){
+  OutputControl fresh;assert(!OutputControl::paused(fresh.snapshot()));
+  reset();setup();fakeMs+=50;processCanMessage(volume(20));sendPendingVolume();expectPacket(0x6C);
+  const auto count=packets.size();const auto sent=liveStats.serialPackets;
+  assert(outputControlTest.setPaused(true));
+  const auto pausedState=outputControlTest.snapshot();
+  assert(!outputControlTest.setPaused(true)&&outputControlTest.snapshot()==pausedState);
+  incoming.push_back(volume(25));fakeMs+=STARTUP_RESEND_MS;loop();
+  assert(liveStats.canFrames==1&&requestedVolume==25&&packets.size()==count);
+  assert(usbLog.find("CAN volume received: 25")!=std::string::npos);
+  processCanMessage(mute(true));fakeMs+=STARTUP_SYNC_MS;sendPendingVolume();
+  assert(requestedMute&&packets.size()==count&&liveStats.serialPackets==sent);
+  // A failed OTA must not release a manual pause.
+  maintenanceTest=true;sendPendingVolume();maintenanceTest=false;sendPendingVolume();
+  assert(packets.size()==count);
+  outputControlTest.setPaused(false);sendPendingVolume();expectPacket(0xA8);
+  assert(packets.size()==count+1&&requestedMute);
+
+  // Resume must reapply the state even if the DSP was changed while paused
+  // and CAN still requests the same value outside the startup retry window.
+  reset();processCanMessage(volume(20));sendPendingVolume();
+  outputControlTest.setPaused(true);sendPendingVolume();
+  outputControlTest.setPaused(false);fakeMs+=49;sendPendingVolume();assert(packets.size()==1);
+  ++fakeMs;sendPendingVolume();assert(packets.size()==2);expectPacket(0x6C);
+  fakeMs+=1000;sendPendingVolume();assert(packets.size()==2);
+  assert(!outputControlTest.setPaused(false));sendPendingVolume();assert(packets.size()==2);
+  // The loop can miss a quick pause/resume; its revision still forces one sync.
+  outputControlTest.setPaused(true);outputControlTest.setPaused(false);
+  maintenanceTest=true;sendPendingVolume();assert(packets.size()==2);
+  maintenanceTest=false;sendPendingVolume();assert(packets.size()==3);expectPacket(0x6C);
+  reset();outputControlTest.setPaused(true);outputControlTest.setPaused(false);
+  sendPendingVolume();assert(packets.empty());
+}
 void ringHistory(){
   LogRing<3,8> ring;LogRing<3,8>::Entry batch[4];uint64_t missed=99;
   assert(ring.copyAfter(0,batch,4,missed)==0&&missed==0);
@@ -225,6 +261,6 @@ void firmwareLifecycle(){
     assert(f.begin(32,64)&&f.write(data,32)&&f.finishFile(32)&&f.activate());
   }
 }
-int main(){mapping();muteAndTiming();coldBootMuteRecovery();startupSyncRetries();startupSyncLatestState();maintenanceAndStartup();ringHistory();firmwareLifecycle();
-  std::cout<<"PASS: actual bridge mapping, mute and volume-change unmute, first-volume startup sync, bounded startup retries and rollover, latest-state replay and OTA pause/resume, invalid CAN, command timing/wrap, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
+int main(){mapping();muteAndTiming();coldBootMuteRecovery();startupSyncRetries();startupSyncLatestState();maintenanceAndStartup();manualOutputPause();ringHistory();firmwareLifecycle();
+  std::cout<<"PASS: actual bridge mapping, mute and volume-change unmute, first-volume startup sync, bounded startup retries and rollover, manual output pause/latest-state resume, OTA pause isolation, invalid CAN, command timing/wrap, CAN-failure diagnostics, bounded receive loop, stats, log-ring pagination/eviction, and OTA lifecycle (size, truncation, duplicate image, disconnect, flash errors, retry, deferred activation)\n";
 }

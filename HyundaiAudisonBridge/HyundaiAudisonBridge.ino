@@ -9,6 +9,7 @@
 #include <driver/twai.h>
 #include <esp_timer.h>
 #include "BridgeDebug.h"
+#include "OutputControl.h"
 
 // Operating mode and optional incoming RS232 diagnostics.
 constexpr bool CAN_LISTEN_ONLY = true;
@@ -64,6 +65,7 @@ bool lastCanMute = false;
 int pendingCode = -1;
 int lastSentCode = -1;
 uint32_t lastSendMs = 0;
+uint32_t lastOutputControlSnapshot = 0;
 uint32_t startupSyncStartedMs = 0;
 bool startupSyncActive = false;
 bool canReady = false;
@@ -170,12 +172,14 @@ void processCanMessage(const twai_message_t &message)
 void sendPendingVolume()
 {
   const uint32_t now = millis();
+  const uint32_t outputControl = debugOutputControlSnapshot();
+  const bool outputSync = outputControl != lastOutputControlSnapshot;
   if (startupSyncActive && uint32_t(now - startupSyncStartedMs) >= STARTUP_SYNC_MS)
     startupSyncActive = false;
   const bool resend = startupSyncActive && pendingCode == lastSentCode &&
                       uint32_t(now - lastSendMs) >= STARTUP_RESEND_MS;
-  if (debugMaintenanceActive() || pendingCode < 0 ||
-      (pendingCode == lastSentCode && !resend) ||
+  if (debugMaintenanceActive() || OutputControl::paused(outputControl) || pendingCode < 0 ||
+      (pendingCode == lastSentCode && !resend && !outputSync) ||
       uint32_t(now - lastSendMs) < COMMAND_GAP_MS)
   {
     return;
@@ -194,6 +198,7 @@ void sendPendingVolume()
   AudisonSerial.flush();
   lastSendMs = millis();
   lastSentCode = pendingCode;
+  lastOutputControlSnapshot = outputControl;
   ++liveStats.serialPackets;
   printPacket("Audison TX: ", packet, sizeof(packet));
 }

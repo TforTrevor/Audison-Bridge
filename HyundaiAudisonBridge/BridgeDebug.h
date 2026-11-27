@@ -39,3 +39,4 @@ void debugInitConsole();
 void debugBegin();
 void debugPublishStats(const BridgeStats &stats);
 bool debugMaintenanceActive();
+uint32_t debugOutputControlSnapshot();

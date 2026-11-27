@@ -12,6 +12,18 @@ from urllib.parse import urlsplit, parse_qs
 ROOT = Path(__file__).resolve().parents[1]
 started = time.monotonic()
 generation = 1
+output_paused = False
+serial_packets = 4
+last_packet_tick = 0
+
+
+def packet_count():
+    global serial_packets, last_packet_tick
+    tick = int((time.monotonic() - started) / 2.5)
+    if not output_paused:
+        serial_packets += max(0, tick - last_packet_tick)
+    last_packet_tick = tick
+    return serial_packets
 
 
 class Preview(BaseHTTPRequestHandler):
@@ -39,7 +51,7 @@ class Preview(BaseHTTPRequestHandler):
         ]
         for i in range(min(300, ms // 2500)):
             lines.append({"id": i + 8, "ms": 1000 + i * 2500,
-                          "text": f"[SIMULATED] CAN volume received: {20 + i % 3} -> Audison command sent"})
+                          "text": f"[SIMULATED] CAN volume received: {20 + i % 3}"})
         lines = lines[-256:]
         if route.path == "/":
             html = (ROOT / "dashboard/index.html").read_text(encoding="utf-8")
@@ -53,9 +65,9 @@ class Preview(BaseHTTPRequestHandler):
                            cores=2, cpuMHz=240, heapFree=168480, heapMin=151220, heapLargest=110592,
                            flashBytes=4194304, sketchBytes=1080840, otaBytes=1966080, partition="app0",
                            ssid="Audison-Bridge-DEMO", ip="192.168.4.1", clients=1, maintenance=False,
-                           rebootPending=False, canReady=True, listenOnly=True, canState=1,
+                           outputPaused=output_paused, rebootPending=False, canReady=True, listenOnly=True, canState=1,
                            canFrames=int(ms * .12), canAgeMs=12, rxMissed=0, rxOverruns=0,
-                           busErrors=0, rxErrors=0, txErrors=0, rxQueued=0, serialPackets=len(lines)//2,
+                           busErrors=0, rxErrors=0, txErrors=0, rxQueued=0, serialPackets=packet_count(),
                            serialRxBytes=0, loops=int(ms * .7), maxLoopUs=1350,
                            volume=20, muted=False, audisonDb=-30.0, logOldest=lines[0]["id"],
                            logLatest=lines[-1]["id"], logRetained=len(lines), logCapacity=256))
@@ -71,14 +83,30 @@ class Preview(BaseHTTPRequestHandler):
             self.send({"error": "Not found"}, 404)
 
     def do_POST(self):
+        global started, generation, output_paused, serial_packets, last_packet_tick
         # The preview intentionally cannot claim to have verified a real image.
         if self.path == "/api/firmware":
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
             self.send({"error": "Preview only. No firmware was installed."}, 400)
+        elif self.path == "/api/bridge-output":
+            form = parse_qs(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode())
+            value = form.get("paused", [""])[0]
+            if self.headers.get("X-Bridge-Token") != "preview-token":
+                self.send({"error": "Invalid action token"}, 403)
+            elif value not in ("0", "1"):
+                self.send({"error": "Set paused to 1 or 0"}, 400)
+            else:
+                packet_count()
+                if output_paused and value == "0":
+                    serial_packets += 1
+                output_paused = value == "1"
+                self.send({"ok": True, "bootId": f"demo-boot-{generation}", "outputPaused": output_paused})
         elif self.path == "/api/reboot":
-            global started, generation
             started = time.monotonic()
             generation += 1
+            output_paused = False
+            serial_packets = 4
+            last_packet_tick = 0
             self.send({"ok": True, "rebooting": True})
         else:
             self.send({"error": "Not found"}, 404)

@@ -19,6 +19,10 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
   pass. Native tests were run with a portable Zig C++ compiler in ignored
   .build/test-tools because this computer lacks the default VS Build Tools.
 - Read README.md for setup, API endpoints, maintenance behavior, and limitations.
+- The dashboard now has a separate manual Audison output pause. It blocks new
+  RS232 commands while CAN/logging continue; resume reapplies the latest state
+  once, including an unchanged value. OutputControl.h tracks cross-core state
+  revisions so a quick pause/resume is not missed. Physical testing is pending.
 
 ## Source and build
 
@@ -56,6 +60,10 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
 - OTA is a parked maintenance operation. RS232 output pauses during upload;
   failed uploads resume the latest requested state. Activate an image only
   after the entire authorized upload request has completed and been verified.
+- Manual output pause is independent of OTA maintenance and browser log pause.
+  Keep its authenticated, action-token-protected POST endpoint idempotent.
+  Disconnects and failed OTA must not release it; reboot clears it. Preserve
+  latest-state resynchronization on resume and the 50 ms command interval.
 
 ## Working across computers
 

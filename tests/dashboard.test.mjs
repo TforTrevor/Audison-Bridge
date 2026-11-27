@@ -20,9 +20,9 @@ const el=id=>elements.get(id);
 let bootId='boot-1',calls=[],requests=[],logs=[{id:1,ms:200,text:'Boot ready'},{id:2,ms:250,text:'Audison TX: 01 04 00 01 6C 00 72'}];
 let stats={firmware:'test',build:'test',uptimeMs:1000,resetReason:'Power on',heapFree:100000,heapMin:90000,heapLargest:60000,
   chip:'ESP32',cores:2,cpuMHz:240,flashBytes:4194304,sketchBytes:1080000,otaBytes:1966080,partition:'app0',ssid:'test',ip:'192.168.4.1',clients:1,
-  maintenance:false,canReady:true,canState:1,listenOnly:true,canFrames:100,canAgeMs:2,busErrors:0,rxErrors:0,rxMissed:0,rxOverruns:0,
+  maintenance:false,outputPaused:false,canReady:true,canState:1,listenOnly:true,canFrames:100,canAgeMs:2,busErrors:0,rxErrors:0,rxMissed:0,rxOverruns:0,
   serialPackets:1,serialRxBytes:0,loops:1000,maxLoopUs:1400,volume:20,muted:false,audisonDb:-30,logLatest:2,logRetained:2,logCapacity:256};
-let rejectFetch=false,heldLogs=null;
+let rejectFetch=false,heldLogs=null,heldStats=null,heldOutput=null,outputError=null;
 const response=(data,status=200)=>({ok:status<400,status,json:async()=>data});
 class XHR {
   upload={};headers={};status=0;responseText='';
@@ -39,7 +39,16 @@ const sandbox={console,Blob,AbortSignal,Date,
   fetch:async(path,options)=>{
     calls.push({path,options});if(rejectFetch)throw Error('Offline');
     if(path==='/api/session')return response({bootId,token:'token-'+bootId});
-    if(path==='/api/stats')return response({...stats,bootId});
+    if(path==='/api/stats')return heldStats?await heldStats:response({...stats,bootId});
+    if(path==='/api/bridge-output'){
+      if(heldOutput)return await heldOutput;
+      if(outputError)return response({error:outputError},403);
+      assert.equal(options.method,'POST');assert.equal(options.headers['X-Bridge-Token'],'token-'+bootId);
+      assert.equal(options.headers['Content-Type'],'application/x-www-form-urlencoded');
+      assert.match(options.body,/^paused=[01]$/);
+      stats.outputPaused=options.body==='paused=1';
+      return response({ok:true,bootId,outputPaused:stats.outputPaused});
+    }
     if(path==='/api/reboot')return response({ok:true,rebooting:true});
     if(path.startsWith('/api/logs?')){
       if(heldLogs)return await heldLogs;
@@ -57,11 +66,52 @@ await settle();
 assert.equal(ui.state.online,true);assert.equal(ui.state.lines.length,2);
 assert.equal(el('volume').textContent,'20 / 44');assert.equal(el('audison').textContent,'-30.0 dB');
 assert.equal(ui.state.token,'token-boot-1');
+assert.equal(el('outputToggle').disabled,false);assert.equal(el('outputToggle').textContent,'Pause output');
+await el('outputToggle').click();
+assert.equal(stats.outputPaused,true);assert.equal(el('outputBadge').textContent,'Paused');
+assert.equal(el('outputToggle').textContent,'Resume output');assert.equal(ui.state.paused,false);
+assert.equal(calls.at(-1).options.body,'paused=1');
+await el('outputToggle').click();assert.equal(stats.outputPaused,false);
+assert.equal(calls.at(-1).options.body,'paused=0');
+
+// Disable duplicate requests and conflicting maintenance while applying a pause.
+let releaseOutput;heldOutput=new Promise(resolve=>{releaseOutput=resolve;});
+const outputChange=el('outputToggle').click();await settle();
+assert.equal(ui.state.outputPending,true);assert.equal(el('outputToggle').disabled,true);
+assert.equal(el('reboot').disabled,true);assert.equal(el('upload').disabled,true);
+const outputCalls=calls.filter(c=>c.path==='/api/bridge-output').length;
+await el('outputToggle').click();assert.equal(calls.filter(c=>c.path==='/api/bridge-output').length,outputCalls);
+stats.outputPaused=true;releaseOutput(response({ok:true,bootId,outputPaused:true}));await outputChange;heldOutput=null;
+assert.equal(ui.state.outputPending,false);assert.equal(el('outputToggle').textContent,'Resume output');
+await el('outputToggle').click();
+
+// A stats response started before the click must not undo its confirmed result.
+let releaseStats;heldStats=new Promise(resolve=>{releaseStats=resolve;});
+const oldStats={...stats,bootId},oldPoll=ui.poll();await settle();
+await el('outputToggle').click();assert.equal(ui.state.stats.outputPaused,true);
+releaseStats(response(oldStats));await oldPoll;heldStats=null;
+assert.equal(ui.state.stats.outputPaused,true);assert.equal(el('outputBadge').textContent,'Paused');
+
+// Rejected or lost responses cannot claim success; polling reconciles device state.
+outputError='Refresh the dashboard and try again';await el('outputToggle').click();
+assert.equal(stats.outputPaused,true);assert.equal(ui.state.stats.outputPaused,null);
+assert.equal(el('outputToggle').disabled,true);assert.match(el('outputStatus').textContent,/not confirmed/);
+outputError=null;await ui.poll();assert.equal(el('outputToggle').textContent,'Resume output');
+rejectFetch=true;await el('outputToggle').click();assert.equal(ui.state.stats.outputPaused,null);
+rejectFetch=false;await ui.poll();assert.equal(ui.state.stats.outputPaused,true);
+
+// Another client's changes are visible through stats; older firmware stays disabled.
+stats.outputPaused=false;await ui.poll();assert.equal(el('outputToggle').textContent,'Pause output');
+stats.maintenance=true;await ui.poll();assert.equal(el('outputToggle').disabled,true);
+assert.equal(el('outputBadge').textContent,'Upload paused');
+stats.maintenance=false;delete stats.outputPaused;await ui.poll();assert.equal(el('outputToggle').disabled,true);
+stats.outputPaused=false;await ui.poll();assert.equal(el('outputToggle').disabled,false);
 el('search').value='Audison TX';el('search').events.input();assert.equal(el('logWindow').children.length,1);
 el('search').value='';
 await el('pause').click();const logCalls=calls.filter(c=>c.path.startsWith('/api/logs')).length;
 await ui.poll();assert.equal(calls.filter(c=>c.path.startsWith('/api/logs')).length,logCalls);
 assert.equal(ui.state.paused,true);
+assert.equal(stats.outputPaused,false);assert.equal(el('outputToggle').disabled,false);
 await el('history').click();await ui.poll();assert.equal(ui.state.lines.length,2);assert.equal(ui.state.paused,true);
 await el('pause').click();
 
@@ -80,15 +130,19 @@ await ui.poll();await el('pause').click();
 el('firmwareFile').files=[{name:'wrong.txt',size:100}];el('firmwareFile').events.change();assert.equal(el('upload').disabled,true);
 el('firmwareFile').files=[{name:'app.bin',size:2000000}];el('firmwareFile').events.change();assert.equal(el('upload').disabled,true);
 el('firmwareFile').files=[{name:'app.bin',size:1080000}];el('firmwareFile').events.change();assert.equal(el('upload').disabled,false);
+stats.outputPaused=true;await ui.poll();
 await el('upload').click();assert.equal(ui.state.uploading,true);assert.equal(el('reboot').disabled,true);
+assert.equal(el('outputToggle').disabled,true);
 assert.equal(requests.at(-1).headers['X-Bridge-Token'],'token-boot-1');
 assert.equal(requests.at(-1).headers['X-Firmware-Size'],'1080000');
 requests.at(-1).upload.onprogress({lengthComputable:true,loaded:40,total:100});assert.equal(el('uploadProgress').value,40);
 requests.at(-1).complete(400,{error:'Bad firmware image'});assert.equal(ui.state.uploading,false);assert.equal(ui.state.restarting,false);
 assert.equal(el('uploadStatus').textContent,'Bad firmware image');
+assert.equal(el('outputToggle').textContent,'Resume output');assert.equal(stats.outputPaused,true);
 await el('upload').click();requests.at(-1).complete(200,{ok:true});assert.equal(ui.state.restarting,true);
-bootId='boot-2';logs=[{id:1,ms:200,text:'New boot'}];await ui.poll();
+bootId='boot-2';stats.outputPaused=false;logs=[{id:1,ms:200,text:'New boot'}];await ui.poll();
 assert.equal(ui.state.restarting,false);assert.equal(ui.state.token,'token-boot-2');assert.equal(ui.state.lines[0].text,'New boot');
+assert.equal(el('outputToggle').textContent,'Pause output');
 
 await el('upload').click();requests.at(-1).onerror();assert.equal(ui.state.operation,'uncertain');
 ui.state.restartSince=Date.now()-31000;await ui.poll();assert.equal(ui.state.restarting,false);
@@ -98,5 +152,7 @@ await el('reboot').click();assert.equal(ui.state.restarting,true);
 assert.equal(calls.at(-1).options.headers['X-Bridge-Token'],'token-boot-2');
 bootId='boot-3';await ui.poll();assert.equal(el('rebootStatus').textContent,'Device restarted successfully.');
 rejectFetch=true;await ui.poll();assert.equal(ui.state.online,false);assert.equal(el('reboot').disabled,true);
+assert.equal(el('outputToggle').disabled,true);
 rejectFetch=false;await ui.poll();assert.equal(ui.state.online,true);assert.equal(el('reboot').disabled,false);
-console.log('PASS: production dashboard script: stats, filtering/text safety, pause/history, stale responses, file validation, upload progress/failure, token renewal, reboot recovery, uncertain upload recovery, disconnect/reconnect');
+assert.equal(el('outputToggle').disabled,false);
+console.log('PASS: production dashboard script: output pause/resume, idempotent authenticated requests, stale stats, request failures and reconciliation, other clients, OTA isolation, reboot reset, stats, filtering/text safety, log pause/history, file validation, upload lifecycle, token renewal, disconnect/reconnect');

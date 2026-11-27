@@ -3,6 +3,7 @@
 #include "Dashboard.h"
 #include "LogRing.h"
 #include "FirmwareUpload.h"
+#include "OutputControl.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
@@ -25,6 +26,7 @@ size_t partialLength = 0;
 portMUX_TYPE statsMux = portMUX_INITIALIZER_UNLOCKED;
 BridgeStats bridgeStats;
 std::atomic<bool> maintenance{false};
+OutputControl outputControl;
 WebServer server(80);
 String password, ssid, bootId, csrfToken;
 uint32_t rebootAt = 0;
@@ -159,6 +161,7 @@ void sendStats() {
   out += ",\"ip\":" + jsonString(WiFi.softAPIP().toString().c_str());
   out += ",\"clients\":" + String(WiFi.softAPgetStationNum());
   out += ",\"maintenance\":" + String(maintenance.load() ? "true" : "false");
+  out += ",\"outputPaused\":" + String(OutputControl::paused(outputControl.snapshot()) ? "true" : "false");
   out += ",\"rebootPending\":" + String(rebootPending ? "true" : "false");
   out += ",\"canReady\":" + String(s.canReady ? "true" : "false");
   out += ",\"listenOnly\":" + String(s.listenOnly ? "true" : "false");
@@ -240,6 +243,25 @@ void downloadLogs() {
 }
 
 void scheduleReboot() { rebootAt = millis() + 2000; rebootPending = true; }
+
+void setOutputPaused() {
+  if (!authorizeAction()) return;
+  if (maintenance.load() || rebootPending) {
+    errorResponse(409, "Maintenance already in progress"); return;
+  }
+  const String value = server.arg("paused");
+  if (value != "1" && value != "0") {
+    errorResponse(400, "Set paused to 1 or 0"); return;
+  }
+  const bool paused = value == "1";
+  if (outputControl.setPaused(paused)) {
+    Console.println(paused ? "Dashboard paused Audison output; CAN decoding continues" :
+                             "Dashboard resumed Audison output; latest state will be sent");
+  }
+  headers();
+  server.send(200, "application/json", "{\"ok\":true,\"bootId\":" + jsonString(bootId.c_str()) +
+              ",\"outputPaused\":" + String(paused ? "true" : "false") + "}");
+}
 
 void failUpload(const String &reason) {
   // Copy before abort, because Update's current error may be reset by abort().
@@ -376,6 +398,7 @@ void networkTask(void *) {
   });
   server.on("/api/session", HTTP_GET, sendSession);
   server.on("/api/stats", HTTP_GET, sendStats);
+  server.on("/api/bridge-output", HTTP_POST, setOutputPaused);
   server.on("/api/logs", HTTP_GET, sendLogs);
   server.on("/api/logs.txt", HTTP_GET, downloadLogs);
   server.on("/api/reboot", HTTP_POST, []() {
@@ -452,3 +475,4 @@ void debugPublishStats(const BridgeStats &stats) {
 }
 
 bool debugMaintenanceActive() { return maintenance.load(); }
+uint32_t debugOutputControlSnapshot() { return outputControl.snapshot(); }

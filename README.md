@@ -12,6 +12,8 @@ password-protected, offline Wi-Fi diagnostics dashboard.
   by the open browser. History clears when the ESP32 reboots.
 - Upload a compiled application `.bin`, verify it, then restart into that firmware.
 - Restart the ESP32 from the dashboard.
+- Pause/resume Audison command output for debugging while CAN decoding and
+  logging continue. This is separate from pausing the console display.
 - Live uptime, reset reason, memory, chip/CPU information, flash/application/OTA
   space, Wi-Fi clients, CAN state/activity/errors, volume/mute, RS232 counters,
   loop rate, and longest loop since boot.
@@ -81,6 +83,24 @@ header privately when moving to another computer, or use a password manager.
 Builds with a custom password embed it in the firmware binary; keep those
 artifacts private too. Git ignores prevent ordinary accidental additions, but
 can be bypassed with `git add -f`; review staged changes before publishing.
+
+## Pause Audison output for debugging
+
+Use **Pause output** in the dashboard's **Audison command output** panel to stop
+new RS232 commands, including startup repeats. A packet already transmitting
+can finish. This does not mute the DSP: it keeps its last volume. CAN volume
+and mute decoding, RS232 input, statistics, and log collection continue.
+
+Use **Resume output** to apply the latest requested volume/mute state once,
+even if it equals the last command sent before pausing. The 50 ms command gap
+and firmware-upload pause still apply. Failed uploads do not clear a manual
+pause. Closing or disconnecting the browser also leaves the device paused;
+the current state is visible on reconnect and to other dashboard clients.
+The pause is RAM-only and clears when the ESP32 restarts.
+
+**Pause logs** only pauses log collection in that browser; it does not affect
+bridge output. Output controls require the same login and action token as
+restart/upload, and are disabled during uploads or pending restarts.
 
 ## Wireless firmware updates
 
@@ -187,6 +207,7 @@ or `audison-bridge.local` (optionally with `:80`). There is no cross-origin API.
 | `/` | GET | Offline dashboard |
 | `/api/session` | GET | Boot ID and action token |
 | `/api/stats` | GET | Live device and bridge statistics |
+| `/api/bridge-output` | POST | Set manual output pause using form field `paused=1` or `paused=0` |
 | `/api/logs?after=0` | GET | Up to 32 retained entries; use `next` for pagination |
 | `/api/logs.txt` | GET | Download retained current-boot logs |
 | `/api/reboot` | POST | Restart after two seconds |
@@ -196,6 +217,11 @@ POST requests need `X-Bridge-Token` from the session endpoint. Firmware requests
 also need `X-Firmware-Size` containing the application's exact byte length.
 Log responses include a boot ID and a missed-entry count so a client can handle
 restarts and history overwritten while it was disconnected.
+The stats field `outputPaused` reports the manual pause request; `maintenance`
+independently reports the firmware-upload pause. The output endpoint accepts
+`application/x-www-form-urlencoded` data and returns `bootId` and `outputPaused`.
+Setting the same pause state again has no additional effect. Its response
+confirms the request, not DSP state or cancellation of an in-flight packet.
 
 ## Hardware validation still required
 
