@@ -69,15 +69,16 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
 
 - Repository: https://github.com/TforTrevor/Audison-Bridge
 - Inspect Git state before editing or pulling. Preserve existing user changes.
-- Only when actually creating a new commit, increment DebugConfig::FIRMWARE_VERSION
-  in HyundaiAudisonBridge/DebugConfig.h, including documentation-only commits.
-  Keep the committed version during editing, testing, and pre-commit builds;
-  do not prepare a version bump in anticipation of a future commit.
-  Default to increasing the patch number and preserving the -wifi suffix;
-  use a larger version change only when requested. Compare with HEAD and bump
-  once per commit, not per edit or build. If the commit does not complete,
-  restore the previous version. Do not rewrite existing history.
-  Rebuild firmware after a version bump when providing an updated binary.
+- At the first tracked edit after a commit, increment DebugConfig::FIRMWARE_VERSION
+  in HyundaiAudisonBridge/DebugConfig.h, including documentation-only edits.
+  Compare with HEAD: if the working version still equals the committed version,
+  bump the patch number once, preserving the -wifi suffix. If already bumped,
+  keep it for all further edits, tests, builds, and the eventual commit.
+  Committing does not bump the version again. Only the first new edit after
+  that commit starts the next version. A failed commit keeps the current edit
+  cycle's version. Do not bump for builds alone or rewrite existing history.
+  Use a larger version change only when requested. Rebuild firmware after a
+  version bump when providing an updated binary.
 - Keep build caches, firmware binaries, logs, credentials, and transfer ZIPs out
   of commits. Optional HyundaiAudisonBridge/LocalSecrets.h is ignored by Git;
   custom passwords belong there as AUDISON_BRIDGE_PASSWORD, never in tracked
@@ -85,3 +86,13 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
   Without a local override the device generates its own persistent password.
   Never print local secrets in tool output or include them in commits.
 - Update this current-state note when physical validation or deployment occurs.
+- Every push to main must publish versioned firmware assets to GitHub Releases.
+  .github/workflows/release.yml tests and builds a clean checkout, then publishes
+  the tag v<FIRMWARE_VERSION> for that exact pushed commit. After pushing,
+  follow the workflow to completion and report the release URL or failure.
+  Re-runs keep published assets unchanged and can complete an interrupted draft;
+  reusing a version for another commit is an error. Do not move release tags.
+  Never publish local dist/ binaries: a private LocalSecrets.h password is
+  embedded in those images. Public release builds must exclude that header
+  and use the device's saved/generated NVS password. A private header override
+  is not automatically saved to NVS, so the active password may change.

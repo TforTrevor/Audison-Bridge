@@ -124,6 +124,40 @@ build for this board. USB remains the recovery path for firmware that boots but
 does not function correctly. OTA writes flash and can stall both cores briefly;
 it is a maintenance operation, not an uninterrupted real-time service.
 
+## Downloads and automatic releases
+
+Every push to `main` runs the **Build and publish firmware** GitHub Actions
+workflow. After regression checks and a clean ESP32 build succeed, it publishes
+a release tagged `v<FIRMWARE_VERSION>` for the exact pushed commit. Download
+firmware from [GitHub Releases](https://github.com/TforTrevor/Audison-Bridge/releases).
+The workflow can also be rerun manually on `main` from the Actions tab.
+
+Each release includes:
+
+- `Audison-Bridge-<version>-esp32-ota.bin`: application image for dashboard updates.
+- `Audison-Bridge-<version>-esp32-usb-merged.bin`: complete 4 MB image for USB
+  installation/recovery at address `0x0`; overwrites saved device settings.
+- `SHA256SUMS.txt`, `build-info.json`, and `FLASHING.txt`: download hashes,
+  source commit/board/toolchain details, and installation instructions.
+
+Release builds use ESP32 core **3.3.12**, Arduino CLI **1.5.1**, and the same
+classic ESP32/4 MB/Minimal SPIFFS OTA settings as the local build. They exclude
+`LocalSecrets.h`; a public binary must never contain your personal password.
+OTA uses the password already saved in device NVS, or generates one if absent.
+A password supplied only by a private header is not saved there automatically,
+so installing public firmware may change it. USB serial at 115200 prints the
+active password. Full USB recovery overwrites NVS; prefer OTA for routine updates.
+
+An existing published release is never overwritten on a workflow rerun. An
+interrupted draft can be completed for the same commit; attempting to reuse a
+version/tag for a different commit fails. Start the next edit cycle's version
+before committing new changes, as described in `AGENTS.md`.
+
+To check release packaging locally, run
+`python -m unittest discover -s tests -p test_release.py`. The packaging script
+rejects local secret headers, stale/mismatched images, and nonempty output folders.
+It is intended for clean builds, not your password-bearing local `dist/` files.
+
 ## Build and checks
 
 With Arduino IDE and ESP32 core installed on Windows:

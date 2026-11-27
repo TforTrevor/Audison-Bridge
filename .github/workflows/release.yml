@@ -1,0 +1,97 @@
+name: Build and publish firmware
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Verify clean release configuration
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(python3 tools/package_release.py --version-only)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run regression checks
+        run: |
+          set -euo pipefail
+          python3 tools/embed_dashboard.py --check
+          python3 -m unittest discover -s tests -p 'test_release.py'
+          node --test tests/dashboard.test.mjs
+          mkdir -p .build/native
+          g++ -std=c++17 -Wall -Wextra -I tests/native tests/native/test_bridge.cpp -o .build/native/test_bridge
+          .build/native/test_bridge
+
+      - uses: arduino/setup-arduino-cli@b3cda96fddef6af6c56b4c5efb5c47e2357935db # v2
+        with:
+          version: '1.5.1'
+
+      - name: Build clean ESP32 images
+        run: |
+          set -euo pipefail
+          index=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index --additional-urls "$index"
+          arduino-cli core install esp32:esp32@3.3.12 --additional-urls "$index"
+          arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs \
+            --output-dir .build/release-build HyundaiAudisonBridge
+          python3 tools/package_release.py --build-dir .build/release-build \
+            --output-dir dist/release --commit "$GITHUB_SHA"
+
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json isDraft > .build/existing-release.json 2>/dev/null; then
+            draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)
+            target_ref="$TAG"
+            if [[ "$draft" == true ]]; then
+              target_ref=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .target_commitish)
+            fi
+            target=$(gh api "repos/$GH_REPO/commits/$target_ref" --jq .sha)
+            if [[ "$target" != "$GITHUB_SHA" ]]; then
+              echo "Version $VERSION already belongs to another commit. Start the next version before publishing."
+              exit 1
+            fi
+            if [[ "$draft" == false ]]; then
+              echo "Release $TAG is already published for this commit; keeping its assets unchanged."
+              exit 0
+            fi
+          else
+            # Refuse to reuse an existing tag belonging to another commit.
+            if target=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha 2>/dev/null); then
+              [[ "$target" == "$GITHUB_SHA" ]] || { echo "Tag $TAG points to another commit"; exit 1; }
+            fi
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft --latest=false \
+              --title "Audison Bridge $VERSION" --notes-file dist/release/FLASHING.txt
+          fi
+          # Stage all assets before publication; interrupted runs can retry a draft.
+          gh release upload "$TAG" dist/release/* --clobber
+          latest=false
+          if [[ "$(gh api "repos/$GH_REPO/commits/main" --jq .sha)" == "$GITHUB_SHA" ]]; then
+            latest=true
+          fi
+          gh release edit "$TAG" --draft=false --latest="$latest"
+          gh release view "$TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
