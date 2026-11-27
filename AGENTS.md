@@ -57,7 +57,16 @@ offline Wi-Fi diagnostics dashboard hosted by that same ESP32.
 
 - Repository: https://github.com/TforTrevor/Audison-Bridge
 - Inspect Git state before editing or pulling. Preserve existing user changes.
+- Before every new commit, increment DebugConfig::FIRMWARE_VERSION in
+  HyundaiAudisonBridge/DebugConfig.h, including documentation-only commits.
+  Default to increasing the patch number and preserving the -wifi suffix;
+  use a larger version change only when requested. Compare with HEAD and bump
+  once per commit, not per edit or build. Do not rewrite existing history.
+  Rebuild firmware after a version bump when providing an updated binary.
 - Keep build caches, firmware binaries, logs, credentials, and transfer ZIPs out
-  of commits. The default Wi-Fi password setting is empty so the device generates
-  its own persistent password; do not commit a personal password.
+  of commits. Optional HyundaiAudisonBridge/LocalSecrets.h is ignored by Git;
+  custom passwords belong there as AUDISON_BRIDGE_PASSWORD, never in tracked
+  DebugConfig.h. The tracked LocalSecrets.example.h contains an empty value.
+  Without a local override the device generates its own persistent password.
+  Never print local secrets in tool output or include them in commits.
 - Update this current-state note when physical validation or deployment occurs.

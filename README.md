@@ -66,9 +66,20 @@ tests below before treating those features as hardware-verified.
 
 By default a random 16-character password is generated once and saved to ESP32
 NVS. It survives normal firmware updates and restarts. It is printed only to USB
-serial, not the remote log history. To choose a personal password before building,
-set `DebugConfig::PASSWORD` in `DebugConfig.h` to 8–63 ASCII characters. Erasing
-all flash also erases the saved generated password.
+serial, not the remote log history. This default keeps the password off your
+computer and out of the source code. Erasing all flash also erases the saved
+generated password.
+
+To choose a personal password before building, copy
+`HyundaiAudisonBridge/LocalSecrets.example.h` to `LocalSecrets.h` in the same
+folder, then set `AUDISON_BRIDGE_PASSWORD` there to 8–63 ASCII characters.
+`LocalSecrets.h` is ignored by Git; keep `DebugConfig.h` free of credentials.
+Both Arduino IDE and the build script load the optional local header. A fresh
+clone without it uses the generated device password. Transfer a custom local
+header privately when moving to another computer, or use a password manager.
+Builds with a custom password embed it in the firmware binary; keep those
+artifacts private too. Git ignores prevent ordinary accidental additions, but
+can be bypassed with `git add -f`; review staged changes before publishing.
 
 ## Wireless firmware updates
 
